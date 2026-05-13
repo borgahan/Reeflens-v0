@@ -85,12 +85,7 @@ python -c "import torch; print(torch.__version__, 'cuda:', torch.cuda.is_availab
    ```
 3. Download the weights:
    ```bash
-   python - <<'EOF'
-   from transformers import Sam3TrackerModel, Sam3TrackerProcessor
-   Sam3TrackerProcessor.from_pretrained("facebook/sam3")
-   Sam3TrackerModel.from_pretrained("facebook/sam3", dtype="float16")
-   print("Model cached.")
-   EOF
+   huggingface-cli download facebook/sam3
    ```
 
 This saves the weights to `~/.cache/huggingface/` (~2–3 GB). The backend uses `local_files_only=True`, so this step must be completed before starting the server — it will not re-download at runtime.
