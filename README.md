@@ -76,18 +76,24 @@ python -c "import torch; print(torch.__version__, 'cuda:', torch.cuda.is_availab
 
 ### 4. Download the SAM3 model weights
 
-The model is publicly available on Hugging Face Hub and downloads automatically on first run:
+`facebook/sam3` is a **gated model** — you must request access before downloading:
 
-```bash
-python - <<'EOF'
-from transformers import Sam3TrackerModel, Sam3TrackerProcessor
-Sam3TrackerProcessor.from_pretrained("facebook/sam3")
-Sam3TrackerModel.from_pretrained("facebook/sam3", dtype="float16")
-print("Model cached.")
-EOF
-```
+1. Go to [huggingface.co/facebook/sam3](https://huggingface.co/facebook/sam3) and request access
+2. Once approved, log in via the CLI:
+   ```bash
+   huggingface-cli login
+   ```
+3. Download the weights:
+   ```bash
+   python - <<'EOF'
+   from transformers import Sam3TrackerModel, Sam3TrackerProcessor
+   Sam3TrackerProcessor.from_pretrained("facebook/sam3")
+   Sam3TrackerModel.from_pretrained("facebook/sam3", dtype="float16")
+   print("Model cached.")
+   EOF
+   ```
 
-This saves the weights to `~/.cache/huggingface/` (~2–3 GB). The backend uses `local_files_only=True`, so this step must be completed before starting the server — it will not download at runtime.
+This saves the weights to `~/.cache/huggingface/` (~2–3 GB). The backend uses `local_files_only=True`, so this step must be completed before starting the server — it will not re-download at runtime.
 
 ### 5. Frontend dependencies
 
