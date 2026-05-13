@@ -81,7 +81,7 @@ python -c "import torch; print(torch.__version__, 'cuda:', torch.cuda.is_availab
 1. Go to [huggingface.co/facebook/sam3](https://huggingface.co/facebook/sam3) and request access
 2. Once approved, log in via the CLI:
    ```bash
-   hf login
+   hf auth login
    ```
 3. Download the weights:
    ```bash
