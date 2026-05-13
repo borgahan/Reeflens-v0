@@ -1,0 +1,9 @@
+# PyTorch is NOT listed here — install it separately (see README).
+# torch version must match your CUDA version.
+transformers==5.6.2
+accelerate
+fastapi>=0.110
+uvicorn[standard]
+opencv-python-headless
+pillow
+numpy

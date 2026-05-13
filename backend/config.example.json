@@ -1,0 +1,8 @@
+{
+  "dataset_dir": "/path/to/your/images",
+  "sam3_checkpoint": "facebook/sam3",
+  "classes": [
+    { "name": "coral", "color": "#FF5733" },
+    { "name": "sand",  "color": "#33FF57" }
+  ]
+}
