@@ -28,8 +28,8 @@ An interactive image annotation tool powered by [SAM3 (Segment Anything Model 3)
 ### 1. Clone
 
 ```bash
-git clone https://github.com/<you>/sam3-annotator.git
-cd sam3-annotator
+git clone https://github.com/colt18/coral-sam3-annotator.git
+cd coral-sam3-annotator
 ```
 
 ### 2. Create conda environment
@@ -76,6 +76,8 @@ python -c "import torch; print(torch.__version__, 'cuda:', torch.cuda.is_availab
 
 ### 4. Download the SAM3 model weights
 
+The model is publicly available on Hugging Face Hub and downloads automatically on first run:
+
 ```bash
 python - <<'EOF'
 from transformers import Sam3TrackerModel, Sam3TrackerProcessor
@@ -85,7 +87,7 @@ print("Model cached.")
 EOF
 ```
 
-This caches the weights under `~/.cache/huggingface/`. The backend loads them with `local_files_only=True`, so the download only needs to happen once.
+This saves the weights to `~/.cache/huggingface/` (~2–3 GB). The backend uses `local_files_only=True`, so this step must be completed before starting the server — it will not download at runtime.
 
 ### 5. Frontend dependencies
 
