@@ -21,7 +21,7 @@ An interactive image annotation tool powered by [SAM3 (Segment Anything Model 3)
 | CUDA | 12+ (NVIDIA GPU required for inference) |
 | Conda | any recent version |
 
-> **macOS note:** SAM3 requires CUDA. The backend will not perform inference on Apple Silicon or CPU-only machines without modification.
+> **macOS note:** CUDA is not available on macOS. The backend automatically falls back to MPS (Apple Silicon) or CPU. See the PyTorch install section below for expected performance.
 
 ## Installation
 
