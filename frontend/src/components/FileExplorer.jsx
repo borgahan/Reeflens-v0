@@ -8,7 +8,7 @@ export default function FileExplorer({ initialPath = '/home/work', onSelect, onC
   const [loading,     setLoading]     = useState(false)
   const [error,       setError]       = useState('')
 
-  const navigate = async (path) => {
+  const navigate = async (path, fallback = null) => {
     setLoading(true)
     setError('')
     try {
@@ -17,13 +17,17 @@ export default function FileExplorer({ initialPath = '/home/work', onSelect, onC
       setParent(data.parent)
       setItems(data.items)
     } catch (e) {
-      setError('Failed to open folder')
+      if (fallback && fallback !== path) {
+        await navigate(fallback)
+      } else {
+        setError('Failed to open folder')
+      }
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => { navigate(initialPath) }, [])
+  useEffect(() => { navigate(initialPath, '/') }, [])
 
   const parts  = currentPath.split('/').filter(Boolean)
   const crumbs = parts.map((part, i) => ({

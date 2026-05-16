@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { postConfig } from '../api'
+import { useState, useEffect } from 'react'
+import { postConfig, getHomeDir } from '../api'
 import FileExplorer from './FileExplorer'
 
 export default function ConfigScreen({ onStart, initialConfig }) {
@@ -8,6 +8,11 @@ export default function ConfigScreen({ onStart, initialConfig }) {
   const [loading,      setLoading]      = useState(false)
   const [error,        setError]        = useState('')
   const [showExplorer, setShowExplorer] = useState(false)
+  const [homeDir,      setHomeDir]      = useState('/')
+
+  useEffect(() => {
+    getHomeDir().then(d => setHomeDir(d.path)).catch(() => setHomeDir('/'))
+  }, [])
 
   const handleStart = async () => {
     if (!datasetDir.trim()) { setError('Dataset directory is required'); return }
@@ -41,7 +46,7 @@ export default function ConfigScreen({ onStart, initialConfig }) {
             placeholder="/home/work/images"
             style={{ ...inputStyle, flex: 1, marginBottom: 0 }}
           />
-          <button onClick={() => setShowExplorer(true)} style={btnBrowse} title="Browse folder">📂</button>
+          <button onClick={() => setShowExplorer(true)} style={btnBrowse} title="Browse folder" disabled={loading}>📂</button>
         </div>
 
         <label style={{ ...labelStyle, marginTop: 14 }}>SAM3 Checkpoint</label>
@@ -67,7 +72,7 @@ export default function ConfigScreen({ onStart, initialConfig }) {
 
       {showExplorer && (
         <FileExplorer
-          initialPath={datasetDir || '/home/work'}
+          initialPath={datasetDir || homeDir}
           onSelect={path => setDatasetDir(path)}
           onClose={() => setShowExplorer(false)}
         />

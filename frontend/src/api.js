@@ -10,6 +10,7 @@ export const postConfig = (cfg) =>
 
 export const getImages  = () => fetch(`${BASE}/images`).then(r => r.json())
 export const browsePath = (path) => fetch(`${BASE}/browse?path=${encodeURIComponent(path)}`).then(r => r.json())
+export const getHomeDir = () => fetch(`${BASE}/home-dir`).then(r => r.json())
 export const imageUrl  = (filename) => `${BASE}/image/${encodeURIComponent(filename)}`
 
 export const predict = (image_path, points) =>

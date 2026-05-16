@@ -281,6 +281,11 @@ def delete_annotation(ann_id: int):
     return {"ok": True}
 
 
+@app.get("/home-dir")
+def home_dir():
+    return {"path": str(Path.home())}
+
+
 @app.get("/browse")
 def browse(path: str = "/"):
     p = Path(path)
