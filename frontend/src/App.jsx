@@ -93,6 +93,15 @@ export default function App() {
     setConfig(cfg)
     setStarted(true)
     setImages(await getImages())
+    refreshCounts()
+  }
+
+  const handleChangeFolder = () => {
+    setStarted(false)
+    setSelectedImage(null)
+    setAnnotations([])
+    setPoints([])
+    setActiveMask(null)
   }
 
   const handleClear = () => {
@@ -243,6 +252,7 @@ export default function App() {
         setSelectedAnnIds={setSelectedAnnIds}
         highlightStyle={highlightStyle}
         setHighlightStyle={setHighlightStyle}
+        onChangeFolder={handleChangeFolder}
       />
       {showModal && (
         <ClassInputModal

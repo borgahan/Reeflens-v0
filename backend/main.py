@@ -127,11 +127,37 @@ def get_config():
     return load_config()
 
 
+def _classes_from_csv(dataset_dir: str) -> list[dict]:
+    """Extract unique label_name values from a Biigle CSV report and return as classes list."""
+    d = Path(dataset_dir)
+    csv_files = list(d.glob("*_biigle_report.csv")) or list(d.parent.glob("*_biigle_report.csv"))
+    if not csv_files:
+        return []
+    labels: list[str] = []
+    seen: set[str] = set()
+    with open(csv_files[0], newline="", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            name = row.get("label_name", "").strip()
+            if name and name not in seen:
+                seen.add(name)
+                labels.append(name)
+    return [
+        {"name": name, "color": f"hsl({(i * 137) % 360},65%,55%)"}
+        for i, name in enumerate(sorted(labels))
+    ]
+
+
 @app.post("/config")
 def post_config(body: ConfigIn):
     existing = load_config()
     cfg = body.model_dump()
-    cfg["classes"] = existing.get("classes", [])  # preserve existing classes
+    dataset_changed = cfg["dataset_dir"] != existing.get("dataset_dir", "")
+    existing_classes = existing.get("classes", [])
+    if existing_classes and not dataset_changed:
+        cfg["classes"] = existing_classes
+    else:
+        csv_classes = _classes_from_csv(cfg["dataset_dir"])
+        cfg["classes"] = csv_classes if csv_classes else existing_classes
     save_config(cfg)
     migrate_if_needed(cfg["dataset_dir"])
     predictor.load_model(cfg["sam3_checkpoint"])

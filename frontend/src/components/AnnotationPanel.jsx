@@ -2,7 +2,7 @@ import { useState, useRef } from 'react'
 import { deleteAnnotation, exportCoco } from '../api'
 import StatsModal from './StatsModal'
 
-function ActionsMenu({ highlightStyle, setHighlightStyle, config }) {
+function ActionsMenu({ highlightStyle, setHighlightStyle, config, onChangeFolder }) {
   const [open,      setOpen]      = useState(false)
   const [showStats, setShowStats] = useState(false)
 
@@ -37,6 +37,9 @@ function ActionsMenu({ highlightStyle, setHighlightStyle, config }) {
           <button onClick={() => setShowStats(true)} style={btn(false, '#1a0a40')}>
             📊 Statistics
           </button>
+          <button onClick={onChangeFolder} style={btn(false, '#1a1a1a')}>
+            📁 Change Folder
+          </button>
           {setHighlightStyle && (
             <>
               <div style={{ fontSize: 10, color: '#556', marginTop: 4 }}>Highlight Style</div>
@@ -62,7 +65,7 @@ function CsvPanel({
   config, csvAnnotations, filterCsvClass, setFilterCsvClass,
   pendingCsvAnns, setPendingCsvAnns, onRequestCsvSave,
   onRequestAutoAnnotate, autoAnnotating, autoResult, autoProgress,
-  highlightStyle, setHighlightStyle,
+  highlightStyle, setHighlightStyle, onChangeFolder,
 }) {
   const classCounts = (csvAnnotations || []).reduce((acc, ann) => {
     acc[ann.label_name] = (acc[ann.label_name] || 0) + 1
@@ -192,7 +195,7 @@ function CsvPanel({
         </div>
       </section>
 
-      <ActionsMenu highlightStyle={highlightStyle} setHighlightStyle={setHighlightStyle} config={config} />
+      <ActionsMenu highlightStyle={highlightStyle} setHighlightStyle={setHighlightStyle} config={config} onChangeFolder={onChangeFolder} />
     </div>
   )
 }
@@ -211,6 +214,7 @@ export default function AnnotationPanel({
   onRequestAutoAnnotate, autoAnnotating, autoResult, autoProgress,
   selectedAnnIds = new Set(), setSelectedAnnIds,
   highlightStyle, setHighlightStyle,
+  onChangeFolder,
 }) {
   const [collapsed,    setCollapsed]    = useState(new Set())
   const lastIdx = useRef(null)
@@ -233,6 +237,7 @@ export default function AnnotationPanel({
         autoProgress={autoProgress}
         highlightStyle={highlightStyle}
         setHighlightStyle={setHighlightStyle}
+        onChangeFolder={onChangeFolder}
       />
     )
   }
@@ -422,7 +427,7 @@ export default function AnnotationPanel({
         </div>
       )}
 
-      <ActionsMenu config={config} />
+      <ActionsMenu config={config} onChangeFolder={onChangeFolder} />
     </div>
   )
 }
