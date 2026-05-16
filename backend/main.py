@@ -24,6 +24,8 @@ from config_manager import load_config, save_config
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp"}
 FRONTEND_DIST    = Path(__file__).parent.parent / "frontend" / "dist"
 
+_csv_cache: dict | None = None  # {"dataset_dir": str, "rows": list[dict]}
+
 
 
 def migrate_if_needed(dataset_dir: str):
@@ -149,6 +151,7 @@ def _classes_from_csv(dataset_dir: str) -> list[dict]:
 
 @app.post("/config")
 def post_config(body: ConfigIn):
+    global _csv_cache
     existing = load_config()
     cfg = body.model_dump()
     dataset_changed = cfg["dataset_dir"] != existing.get("dataset_dir", "")
@@ -156,6 +159,7 @@ def post_config(body: ConfigIn):
     if existing_classes and not dataset_changed:
         cfg["classes"] = existing_classes
     else:
+        _csv_cache = None
         csv_classes = _classes_from_csv(cfg["dataset_dir"])
         cfg["classes"] = csv_classes if csv_classes else existing_classes
     save_config(cfg)
@@ -319,30 +323,42 @@ def annotation_counts():
     return CocoManager(cfg.get("dataset_dir", "")).get_annotation_counts()
 
 
-@app.get("/csv-annotations/{filename}")
-def get_csv_annotations(filename: str):
-    cfg = load_config()
-    dataset_dir = Path(cfg.get("dataset_dir", ""))
+def _load_csv_cache(dataset_dir: Path) -> list[dict]:
+    global _csv_cache
+    ds = str(dataset_dir)
+    if _csv_cache and _csv_cache["dataset_dir"] == ds:
+        return _csv_cache["rows"]
     csv_files = list(dataset_dir.glob("*_biigle_report.csv")) or \
                 list(dataset_dir.parent.glob("*_biigle_report.csv"))
     if not csv_files:
+        _csv_cache = {"dataset_dir": ds, "rows": []}
         return []
-    results = []
+    rows = []
     with open(csv_files[0], newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            if row.get("filename") != filename:
-                continue
+        for row in csv.DictReader(f):
             try:
                 pts = _json.loads(row["points"])
             except Exception:
                 continue
-            results.append({
+            rows.append({
+                "filename":   row.get("filename", ""),
                 "label_name": row.get("label_name", ""),
                 "shape_name": row.get("shape_name", ""),
                 "points":     pts,
             })
-    return results
+    _csv_cache = {"dataset_dir": ds, "rows": rows}
+    return rows
+
+
+@app.get("/csv-annotations/{filename}")
+def get_csv_annotations(filename: str):
+    cfg = load_config()
+    dataset_dir = Path(cfg.get("dataset_dir", ""))
+    rows = _load_csv_cache(dataset_dir)
+    return [
+        {"label_name": r["label_name"], "shape_name": r["shape_name"], "points": r["points"]}
+        for r in rows if r["filename"] == filename
+    ]
 
 
 @app.post("/auto-annotate-points")
