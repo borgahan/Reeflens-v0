@@ -122,6 +122,7 @@ export default function AnnotationCanvas({
   const containerRef = useRef(null)
   const stageRef     = useRef(null)
   const dragging     = useRef(false)
+  const freehandDrawing = useRef(false)
 
   const [containerSize, setContainerSize] = useState({ width: 800, height: 600 })
   const [scale,         setScale]         = useState(1)
@@ -170,6 +171,22 @@ export default function AnnotationCanvas({
 
   useEffect(() => {
     const handler = async (e) => {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && !predicting) {
+        if (drawMode && manualPoints.length > 0) {
+          setManualPoints([])
+          e.preventDefault()
+          return
+        }
+        if (activeMask || points.length > 0 || draftBox) {
+          setActiveMask(null)
+          setPoints([])
+          setIouScore(null)
+          setDraftBox(null)
+          e.preventDefault()
+          return
+        }
+      }
+
       if (e.key === 'Enter' && drawMode && manualPoints.length >= 3 && !predicting) {
         const b64 = polygonToBase64Mask(manualPoints, imgDims.w, imgDims.h)
         setActiveMask(b64)
@@ -296,11 +313,7 @@ export default function AnnotationCanvas({
   const handleStageClick  = (e) => {
     if (selectMode) { onClearSelection?.(); return }
     if (drawMode) {
-      const stage = e.target.getStage()
-      const ptr   = stage.getPointerPosition()
-      const imgX  = Math.round((ptr.x - stage.x()) / stage.scaleX() / scale)
-      const imgY  = Math.round((ptr.y - stage.y()) / stage.scaleY() / scale)
-      setManualPoints(prev => [...prev, { x: imgX, y: imgY }])
+      // Freehand points are handled by mousedown/mousemove
       return
     }
     if (e.evt.button === 0) handleClick(e, 1)
@@ -315,7 +328,18 @@ export default function AnnotationCanvas({
   }
 
   const handleStageMouseDown = (e) => {
-    if (isCsvTab || selectMode || drawMode || predicting) return
+    if (isCsvTab || selectMode || predicting) return
+    if (drawMode) {
+      if (e.evt.button === 0) { // left click
+        freehandDrawing.current = true
+        const stage = e.target.getStage()
+        const ptr = stage.getPointerPosition()
+        const imgX = Math.round((ptr.x - stage.x()) / stage.scaleX() / scale)
+        const imgY = Math.round((ptr.y - stage.y()) / stage.scaleY() / scale)
+        setManualPoints(prev => [...prev, { x: imgX, y: imgY }])
+      }
+      return
+    }
     if (e.evt.shiftKey) {
       const stage = e.target.getStage()
       const ptr   = stage.getPointerPosition()
@@ -326,6 +350,10 @@ export default function AnnotationCanvas({
   }
 
   const handleStageMouseUp = async (e) => {
+    if (drawMode && freehandDrawing.current) {
+      freehandDrawing.current = false
+      return
+    }
     if (draftBox) {
       const box = draftBox
       setDraftBox(null)
@@ -356,6 +384,23 @@ export default function AnnotationCanvas({
     if (!stage) return
     const pos = stage.getPointerPosition()
     if (pos) setMousePos(pos)
+    
+    if (drawMode && freehandDrawing.current) {
+      const imgX = Math.round((pos.x - stage.x()) / stage.scaleX() / scale)
+      const imgY = Math.round((pos.y - stage.y()) / stage.scaleY() / scale)
+      setManualPoints(prev => {
+        if (prev.length === 0) return [{ x: imgX, y: imgY }]
+        const last = prev[prev.length - 1]
+        // Drop a point every 5 raw pixels for smooth lasso without overloading
+        const dist = Math.hypot(last.x - imgX, last.y - imgY)
+        if (dist > 5) {
+          return [...prev, { x: imgX, y: imgY }]
+        }
+        return prev
+      })
+      return
+    }
+
     if (draftBox) {
       const imgX = Math.round((pos.x - stage.x()) / stage.scaleX() / scale)
       const imgY = Math.round((pos.y - stage.y()) / stage.scaleY() / scale)
@@ -443,9 +488,10 @@ export default function AnnotationCanvas({
               }}>
                 <div><b>Manual Draw Mode</b></div>
                 <div style={{ fontSize: 10 }}>Left click: Add point</div>
+                <div style={{ fontSize: 10 }}>Drag: Freehand lasso</div>
                 <div style={{ fontSize: 10 }}>Right click: Undo point</div>
                 <div style={{ fontSize: 10 }}>Enter: Finish polygon</div>
-                <div style={{ fontSize: 10 }}>Esc: Cancel</div>
+                <div style={{ fontSize: 10 }}>Delete/Esc: Cancel</div>
               </div>
             )}
 
