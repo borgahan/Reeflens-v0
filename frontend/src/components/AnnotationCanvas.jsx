@@ -198,9 +198,14 @@ export default function AnnotationCanvas({
         setManualPoints([])
         return
       }
-      if (e.key.toLowerCase() === 'm' && !predicting && activeTab !== 'csv') {
+      if (e.key.toLowerCase() === 'm' && !e.ctrlKey && !e.metaKey && !predicting && activeTab !== 'csv') {
         setDrawMode(v => !v)
         setSelectMode(false)
+        return
+      }
+      if (e.key.toLowerCase() === 's' && !e.ctrlKey && !e.metaKey && !predicting && activeTab !== 'csv') {
+        setSelectMode(v => !v)
+        setDrawMode(false)
         return
       }
       if (e.key === 'Enter' && activeCsvAnn && !activeMask && !predicting) {
