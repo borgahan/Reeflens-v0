@@ -181,12 +181,45 @@ def list_images():
     )
 
 
+def _strip_exif(image_path: str) -> bytes:
+    with open(image_path, "rb") as f:
+        data = f.read()
+    if not data.startswith(b"\xff\xd8"):
+        return data
+    out = bytearray(b"\xff\xd8")
+    i = 2
+    while i < len(data) - 1:
+        if data[i] != 0xff:
+            out.extend(data[i:])
+            break
+        marker = data[i+1]
+        if marker == 0xd9 or marker == 0xda:
+            out.extend(data[i:])
+            break
+        length = (data[i+2] << 8) | data[i+3]
+        if marker == 0xe1 and length >= 6 and data[i+4:i+10] == b"Exif\x00\x00":
+            pass # Skip EXIF
+        else:
+            out.extend(data[i:i+2+length])
+        i += 2 + length
+    return bytes(out)
+
+
 @app.get("/image/{filename}")
 def get_image(filename: str):
+    from fastapi.responses import Response
     cfg  = load_config()
     path = Path(cfg["dataset_dir"]) / filename
     if not path.exists() or not path.is_file():
         raise HTTPException(404, "Image not found")
+    
+    if path.suffix.lower() in (".jpg", ".jpeg"):
+        try:
+            stripped = _strip_exif(str(path))
+            return Response(content=stripped, media_type="image/jpeg")
+        except Exception as e:
+            print(f"[warning] failed to strip exif: {e}")
+            
     return FileResponse(str(path))
 
 
