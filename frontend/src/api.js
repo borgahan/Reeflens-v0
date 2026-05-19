@@ -13,11 +13,11 @@ export const browsePath = (path) => fetch(`${BASE}/browse?path=${encodeURICompon
 export const getHomeDir = () => fetch(`${BASE}/home-dir`).then(r => r.json())
 export const imageUrl  = (filename) => `${BASE}/image/${encodeURIComponent(filename)}`
 
-export const predict = (image_path, points) =>
+export const predict = (image_path, points, box = null) =>
   fetch(`${BASE}/predict`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ image_path, points }),
+    body: JSON.stringify({ image_path, points, box }),
   }).then(r => {
     if (!r.ok) return r.json().then(e => Promise.reject(e.detail))
     return r.json()

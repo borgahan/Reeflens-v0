@@ -72,7 +72,7 @@ export default function App() {
   useEffect(() => {
     const down = (e) => {
       if (e.key === 'Shift') { setShiftHeld(true); return }
-      if (e.key === 'Delete') { handleDeleteSelected(); return }
+      if (e.key === 'Delete' || e.key === 'Backspace') { handleDeleteSelected(); return }
       if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
         e.preventDefault()
         setSelectedAnnIds(new Set(annotations.map(a => a.id)))
@@ -192,6 +192,34 @@ export default function App() {
     refreshAnnotations()
   }
 
+  const handleAutoAnnotateAll = async () => {
+    if (!csvAnnotations || csvAnnotations.length === 0) return
+    const pointsToAnnotate = csvAnnotations.filter(a => 
+      a.shape_name === 'Point' && 
+      !a.label_name.toLowerCase().includes('laser')
+    )
+    if (pointsToAnnotate.length === 0) return
+
+    const imgPath  = `${config.dataset_dir}/${selectedImage}`
+    setAutoAnnotating(true)
+    setAutoProgress({ current: 0, total: pointsToAnnotate.length })
+    let saved = 0, failed = 0
+    for (let i = 0; i < pointsToAnnotate.length; i++) {
+      const ptAnn = pointsToAnnotate[i]
+      try {
+        const result = await predict(imgPath, [{ x: ptAnn.points[0], y: ptAnn.points[1], label: 1 }])
+        await saveAnnotation(imgPath, result.mask_b64, ptAnn.label_name)
+        saved++
+      } catch {
+        failed++
+      }
+      setAutoProgress({ current: i + 1, total: pointsToAnnotate.length })
+    }
+    setAutoResult({ saved, failed })
+    setAutoAnnotating(false)
+    refreshAnnotations()
+  }
+
   if (!started || !config) {
     return <ConfigScreen onStart={handleStart} initialConfig={config} />
   }
@@ -245,6 +273,7 @@ export default function App() {
         setPendingCsvAnns={setPendingCsvAnns}
         onRequestCsvSave={handleRequestCsvSave}
         onRequestAutoAnnotate={handleRequestAutoAnnotate}
+        onRequestAutoAnnotateAll={handleAutoAnnotateAll}
         autoAnnotating={autoAnnotating}
         autoResult={autoResult}
         autoProgress={autoProgress}

@@ -97,6 +97,7 @@ class PointIn(BaseModel):
 class PredictIn(BaseModel):
     image_path: str
     points:     list[PointIn]
+    box:        list[float] | None = None
 
 
 class SaveIn(BaseModel):
@@ -197,6 +198,7 @@ def predict(body: PredictIn):
         result = predictor.predict_mask(
             body.image_path,
             [p.model_dump() for p in body.points],
+            box=body.box,
         )
     except Exception as e:
         raise HTTPException(500, str(e))

@@ -64,7 +64,7 @@ function ActionsMenu({ highlightStyle, setHighlightStyle, config, onChangeFolder
 function CsvPanel({
   config, csvAnnotations, filterCsvClass, setFilterCsvClass,
   pendingCsvAnns, setPendingCsvAnns, onRequestCsvSave,
-  onRequestAutoAnnotate, autoAnnotating, autoResult, autoProgress,
+  onRequestAutoAnnotate, onRequestAutoAnnotateAll, autoAnnotating, autoResult, autoProgress,
   highlightStyle, setHighlightStyle, onChangeFolder,
 }) {
   const classCounts = (csvAnnotations || []).reduce((acc, ann) => {
@@ -79,9 +79,17 @@ function CsvPanel({
   const pendingKeys = new Set((pendingCsvAnns || []).map(annKey))
   const unselected  = filtered.filter(a => !pendingKeys.has(annKey(a)))
 
-  const filteredPoints = filterCsvClass
-    ? (csvAnnotations || []).filter(a => a.label_name === filterCsvClass && a.shape_name === 'Point')
-    : []
+  const allPoints = (csvAnnotations || []).filter(a => 
+    a.shape_name === 'Point' && 
+    !a.label_name.toLowerCase().includes('laser')
+  )
+  const pointsToShow = filterCsvClass 
+    ? (csvAnnotations || []).filter(a => 
+        a.label_name === filterCsvClass && 
+        a.shape_name === 'Point' && 
+        !a.label_name.toLowerCase().includes('laser')
+      ) 
+    : allPoints
 
   return (
     <div style={panelStyle}>
@@ -146,15 +154,25 @@ function CsvPanel({
         })}
       </section>
 
-      {filteredPoints.length > 0 && (
+      {(pointsToShow.length > 0 || autoAnnotating || autoResult) && (
         <section style={{ ...sectionStyle, borderTop: '1px solid #1a2a3a' }}>
-          <button
-            onClick={() => onRequestAutoAnnotate(filterCsvClass, filteredPoints)}
-            disabled={autoAnnotating}
-            style={{ ...btn(autoAnnotating, '#1a0a40'), width: '100%', fontSize: 12 }}
-          >
-            {autoAnnotating ? '⏳ SAM3 running…' : `⚡ Auto-annotate with SAM3 (${filteredPoints.length} points)`}
-          </button>
+          {filterCsvClass ? (
+            <button
+              onClick={() => onRequestAutoAnnotate(filterCsvClass, pointsToShow)}
+              disabled={autoAnnotating}
+              style={{ ...btn(autoAnnotating, '#1a0a40'), width: '100%', fontSize: 12 }}
+            >
+              {autoAnnotating ? '⏳ SAM3 running…' : `⚡ Auto-annotate with SAM3 (${pointsToShow.length} points)`}
+            </button>
+          ) : (
+            <button
+              onClick={onRequestAutoAnnotateAll}
+              disabled={autoAnnotating}
+              style={{ ...btn(autoAnnotating, '#3a1a50'), width: '100%', fontSize: 12, border: '1px solid #6a3a9a' }}
+            >
+              {autoAnnotating ? '⏳ SAM3 running…' : `⚡ Auto-Mask All Categories (${pointsToShow.length} points)`}
+            </button>
+          )}
           {autoAnnotating && autoProgress.total > 0 && (
             <div style={{ marginTop: 6 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#888', marginBottom: 3 }}>
@@ -211,7 +229,7 @@ export default function AnnotationPanel({
   filterCsvClass, setFilterCsvClass,
   pendingCsvAnns, setPendingCsvAnns,
   onRequestCsvSave,
-  onRequestAutoAnnotate, autoAnnotating, autoResult, autoProgress,
+  onRequestAutoAnnotate, onRequestAutoAnnotateAll, autoAnnotating, autoResult, autoProgress,
   selectedAnnIds = new Set(), setSelectedAnnIds,
   highlightStyle, setHighlightStyle,
   onChangeFolder,
@@ -232,6 +250,7 @@ export default function AnnotationPanel({
         setPendingCsvAnns={setPendingCsvAnns}
         onRequestCsvSave={onRequestCsvSave}
         onRequestAutoAnnotate={onRequestAutoAnnotate}
+        onRequestAutoAnnotateAll={onRequestAutoAnnotateAll}
         autoAnnotating={autoAnnotating}
         autoResult={autoResult}
         autoProgress={autoProgress}

@@ -33,6 +33,26 @@ function colorizeBase64Mask(base64, hexColor) {
   })
 }
 
+function polygonToBase64Mask(points, width, height) {
+  const cv = document.createElement('canvas')
+  cv.width = width
+  cv.height = height
+  const ctx = cv.getContext('2d')
+  ctx.fillStyle = 'black'
+  ctx.fillRect(0, 0, width, height)
+  
+  ctx.beginPath()
+  ctx.moveTo(points[0].x, points[0].y)
+  for (let i = 1; i < points.length; i++) {
+    ctx.lineTo(points[i].x, points[i].y)
+  }
+  ctx.closePath()
+  ctx.fillStyle = 'white'
+  ctx.fill()
+  
+  return cv.toDataURL('image/png').split(',')[1]
+}
+
 function MaskOverlay({ dataUrl, scaleX, scaleY, opacity }) {
   const [img] = useImage(dataUrl)
   if (!img) return null
@@ -115,6 +135,9 @@ export default function AnnotationCanvas({
   const [annOpacity,     setAnnOpacity]     = useState(30)
   const [showAnns,       setShowAnns]       = useState(true)
   const [selectMode,     setSelectMode]     = useState(false)
+  const [drawMode,       setDrawMode]       = useState(false)
+  const [manualPoints,   setManualPoints]   = useState([])
+  const [draftBox,       setDraftBox]       = useState(null)
 
   const imgSrc            = selectedImage ? imageUrl(selectedImage) : null
   const [bgImage, status] = useImage(imgSrc, 'anonymous')
@@ -147,6 +170,22 @@ export default function AnnotationCanvas({
 
   useEffect(() => {
     const handler = async (e) => {
+      if (e.key === 'Enter' && drawMode && manualPoints.length >= 3 && !predicting) {
+        const b64 = polygonToBase64Mask(manualPoints, imgDims.w, imgDims.h)
+        setActiveMask(b64)
+        setIouScore(null)
+        setManualPoints([])
+        return
+      }
+      if (e.key === 'Escape' && drawMode) {
+        setManualPoints([])
+        return
+      }
+      if (e.key.toLowerCase() === 'm' && !predicting && activeTab !== 'csv') {
+        setDrawMode(v => !v)
+        setSelectMode(false)
+        return
+      }
       if (e.key === 'Enter' && activeCsvAnn && !activeMask && !predicting) {
         // Enter with active CSV annotation → add to pending
         setPendingCsvAnns(prev => [...prev, activeCsvAnn])
@@ -183,6 +222,7 @@ export default function AnnotationCanvas({
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [activeMask, activeCsvAnn, predicting, points, selectedImage, config.dataset_dir,
+      drawMode, manualPoints, imgDims, activeTab,
       onRequestSave, setPoints, setActiveMask, setIouScore, setPredicting,
       setActiveCsvAnn, setPendingCsvAnns])
 
@@ -255,11 +295,60 @@ export default function AnnotationCanvas({
 
   const handleStageClick  = (e) => {
     if (selectMode) { onClearSelection?.(); return }
+    if (drawMode) {
+      const stage = e.target.getStage()
+      const ptr   = stage.getPointerPosition()
+      const imgX  = Math.round((ptr.x - stage.x()) / stage.scaleX() / scale)
+      const imgY  = Math.round((ptr.y - stage.y()) / stage.scaleY() / scale)
+      setManualPoints(prev => [...prev, { x: imgX, y: imgY }])
+      return
+    }
     if (e.evt.button === 0) handleClick(e, 1)
   }
   const handleContextMenu = (e) => {
     e.evt.preventDefault()
+    if (drawMode) {
+      setManualPoints(prev => prev.slice(0, -1))
+      return
+    }
     if (!selectMode) handleClick(e, 0)
+  }
+
+  const handleStageMouseDown = (e) => {
+    if (isCsvTab || selectMode || drawMode || predicting) return
+    if (e.evt.shiftKey) {
+      const stage = e.target.getStage()
+      const ptr   = stage.getPointerPosition()
+      const imgX  = Math.round((ptr.x - stage.x()) / stage.scaleX() / scale)
+      const imgY  = Math.round((ptr.y - stage.y()) / stage.scaleY() / scale)
+      setDraftBox({ x1: imgX, y1: imgY, x2: imgX, y2: imgY })
+    }
+  }
+
+  const handleStageMouseUp = async (e) => {
+    if (draftBox) {
+      const box = draftBox
+      setDraftBox(null)
+      const minX = Math.min(box.x1, box.x2)
+      const maxX = Math.max(box.x1, box.x2)
+      const minY = Math.min(box.y1, box.y2)
+      const maxY = Math.max(box.y1, box.y2)
+      
+      if (maxX - minX < 2 || maxY - minY < 2) return
+      
+      setError('')
+      setPoints([])
+      setPredicting(true)
+      try {
+        const result = await predict(`${config.dataset_dir}/${selectedImage}`, [], [minX, minY, maxX, maxY])
+        setActiveMask(result.mask_b64)
+        setIouScore(result.iou_score)
+      } catch (err) {
+        setError(typeof err === 'string' ? err : 'Prediction error')
+      } finally {
+        setPredicting(false)
+      }
+    }
   }
 
   const handleMouseMove = useCallback((e) => {
@@ -267,7 +356,12 @@ export default function AnnotationCanvas({
     if (!stage) return
     const pos = stage.getPointerPosition()
     if (pos) setMousePos(pos)
-  }, [])
+    if (draftBox) {
+      const imgX = Math.round((pos.x - stage.x()) / stage.scaleX() / scale)
+      const imgY = Math.round((pos.y - stage.y()) / stage.scaleY() / scale)
+      setDraftBox(prev => ({ ...prev, x2: imgX, y2: imgY }))
+    }
+  }, [draftBox, scale])
 
   const isCsvTab = activeTab === 'csv'
 
@@ -340,6 +434,21 @@ export default function AnnotationCanvas({
               </div>
             )}
 
+            {drawMode && !isCsvTab && (
+              <div style={{
+                position: 'absolute', top: 8, right: 8, zIndex: 10,
+                background: 'rgba(255,0,255,0.15)', borderRadius: 6, padding: '6px 12px',
+                fontSize: 12, color: '#ff88ff', border: '1px solid #aa22aa',
+                display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2
+              }}>
+                <div><b>Manual Draw Mode</b></div>
+                <div style={{ fontSize: 10 }}>Left click: Add point</div>
+                <div style={{ fontSize: 10 }}>Right click: Undo point</div>
+                <div style={{ fontSize: 10 }}>Enter: Finish polygon</div>
+                <div style={{ fontSize: 10 }}>Esc: Cancel</div>
+              </div>
+            )}
+
             {/* Zoom + opacity kontrolleri */}
             <div style={{
               position: 'absolute', bottom: 12, right: 12, zIndex: 10,
@@ -374,8 +483,20 @@ export default function AnnotationCanvas({
               >
                 {showAnns ? '👁' : '👁'}
               </button>
+              <button
+                onClick={() => { setDrawMode(v => !v); setSelectMode(false) }}
+                title={drawMode ? 'Exit Manual Draw' : 'Manual Polygon Draw (M)'}
+                style={{
+                  ...zoomBtn, width: 36, fontSize: 16,
+                  background: drawMode ? '#7a3aaa' : '#1a1a1a',
+                  color: drawMode ? '#fff' : '#555',
+                  border: drawMode ? '1px solid #9a5aCC' : '1px solid #333',
+                }}
+              >
+                ✎
+              </button>
               <div
-                onClick={() => setSelectMode(v => !v)}
+                onClick={() => { setSelectMode(v => !v); setDrawMode(false) }}
                 title={selectMode ? 'Switch to annotate mode (✏)' : 'Switch to select mode (↖)'}
                 style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}
               >
@@ -407,17 +528,19 @@ export default function AnnotationCanvas({
               scaleY={zoom}
               x={stagePos.x}
               y={stagePos.y}
-              draggable
+              draggable={!shiftHeld && !draftBox}
               onDragStart={() => { dragging.current = true }}
               onDragEnd={e => {
                 setStagePos({ x: e.target.x(), y: e.target.y() })
                 setTimeout(() => { dragging.current = false }, 50)
               }}
               onWheel={handleWheel}
-              onClick={isCsvTab ? null : handleStageClick}
-              onContextMenu={isCsvTab ? null : handleContextMenu}
+              onClick={isCsvTab || draftBox ? null : handleStageClick}
+              onContextMenu={isCsvTab || draftBox ? null : handleContextMenu}
+              onMouseDown={handleStageMouseDown}
+              onMouseUp={handleStageMouseUp}
               onMouseMove={handleMouseMove}
-              style={{ cursor: isCsvTab ? 'default' : selectMode ? 'default' : (predicting ? 'wait' : 'crosshair') }}
+              style={{ cursor: isCsvTab ? 'default' : selectMode ? 'default' : (predicting ? 'wait' : (shiftHeld ? 'crosshair' : 'crosshair')) }}
             >
               <Layer>
                 {bgImage && <KonvaImage image={bgImage} scaleX={scale} scaleY={scale} />}
@@ -452,6 +575,46 @@ export default function AnnotationCanvas({
                         radius={5 / zoom}
                         fill={p.label === 1 ? '#00dd00' : '#dd2222'}
                         stroke="white" strokeWidth={1.5 / zoom}
+                      />
+                    ))}
+                    {draftBox && (
+                      <Rect
+                        x={Math.min(draftBox.x1, draftBox.x2) * scale}
+                        y={Math.min(draftBox.y1, draftBox.y2) * scale}
+                        width={Math.abs(draftBox.x2 - draftBox.x1) * scale}
+                        height={Math.abs(draftBox.y2 - draftBox.y1) * scale}
+                        stroke="#00ccff" strokeWidth={2 / zoom}
+                        fill="rgba(0, 204, 255, 0.2)"
+                      />
+                    )}
+                    {drawMode && manualPoints.length > 0 && (
+                      <Line
+                        points={manualPoints.flatMap(p => [p.x * scale, p.y * scale])}
+                        closed={false}
+                        stroke="#ff44ff"
+                        strokeWidth={2.5 / zoom}
+                      />
+                    )}
+                    {drawMode && manualPoints.length > 0 && mousePos && (
+                      <Line
+                        points={[
+                          manualPoints[manualPoints.length - 1].x * scale,
+                          manualPoints[manualPoints.length - 1].y * scale,
+                          (mousePos.x - stagePos.x) / zoom,
+                          (mousePos.y - stagePos.y) / zoom
+                        ]}
+                        stroke="#ff44ff"
+                        strokeWidth={2 / zoom}
+                        dash={[5 / zoom, 5 / zoom]}
+                      />
+                    )}
+                    {drawMode && manualPoints.map((p, i) => (
+                      <Circle
+                        key={`mp-${i}`}
+                        x={p.x * scale}
+                        y={p.y * scale}
+                        radius={4 / zoom}
+                        fill="#ff44ff"
                       />
                     ))}
                   </>

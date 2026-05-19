@@ -38,15 +38,20 @@ def load_model(checkpoint: str = "facebook/sam3"):
     print("SAM3 ready ✓")
 
 
-def predict_mask(image_path: str, points: list[dict]) -> dict:
+def predict_mask(image_path: str, points: list[dict], box: list[float] | None = None) -> dict:
     """
     points: [{"x": 100, "y": 200, "label": 1}, ...]
+    box: [x_min, y_min, x_max, y_max]
     Returns: {"mask_b64": "...", "iou_score": 0.94, "bbox": [x, y, w, h]}
     """
     img_pil         = Image.open(image_path).convert("RGB")
     W_orig, H_orig  = img_pil.size
     pts             = [(int(p["x"]), int(p["y"]), int(p["label"])) for p in points]
-    cx0, cy0, _     = pts[0]
+    
+    if box is not None:
+        cx0, cy0 = (box[0] + box[2]) / 2.0, (box[1] + box[3]) / 2.0
+    else:
+        cx0, cy0, _ = pts[0]
 
     crop_arr, _, (x_min, y_min, x_max, y_max) = crop_for_sam3(img_pil, cx0, cy0)
     crop_h, crop_w  = crop_arr.shape[:2]
@@ -60,22 +65,35 @@ def predict_mask(image_path: str, points: list[dict]) -> dict:
             local_pts.append([float(lx), float(ly)])
             local_lbls.append(int(lbl))
 
-    if not local_pts:
+    if not local_pts and box is None:
         raise ValueError("All points are outside the crop region.")
+
+    kwargs = {}
+    if local_pts:
+        kwargs["input_points"] = [[local_pts]]
+        kwargs["input_labels"] = [[local_lbls]]
+    if box is not None:
+        bx_min, by_min, bx_max, by_max = box
+        kwargs["input_boxes"] = [[[
+            max(0, float(bx_min - x_min)),
+            max(0, float(by_min - y_min)),
+            min(crop_w, float(bx_max - x_min)),
+            min(crop_h, float(by_max - y_min)),
+        ]]]
 
     inputs = _tracker_processor(
         images=crop_pil,
-        input_points=[[local_pts]],
-        input_labels=[[local_lbls]],
         return_tensors="pt",
+        **kwargs
     )
 
     cast = lambda t: t.to(dtype=_tracker_sa.dtype, device=DEVICE)
     with torch.no_grad():
         out = _tracker_sa(
             pixel_values=cast(inputs["pixel_values"]),
-            input_points=cast(inputs["input_points"]),
-            input_labels=inputs["input_labels"].to(DEVICE),
+            input_points=cast(inputs["input_points"]) if "input_points" in inputs else None,
+            input_labels=inputs["input_labels"].to(DEVICE) if "input_labels" in inputs else None,
+            input_boxes=cast(inputs["input_boxes"]) if "input_boxes" in inputs else None,
             multimask_output=True,
         )
 
